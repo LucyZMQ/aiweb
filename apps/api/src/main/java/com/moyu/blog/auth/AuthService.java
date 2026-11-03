@@ -99,7 +99,11 @@ public class AuthService {
         UserAccount user = userRepository.findByEmailIgnoreCase(email).orElseGet(() -> {
             Role role = auth.adminEmails().stream().anyMatch(admin -> admin.equalsIgnoreCase(email))
                     ? Role.ADMIN : Role.READER;
-            String displayName = email.substring(0, email.indexOf('@'));
+            int at = email.indexOf('@');
+            String displayName = (at > 0 ? email.substring(0, at) : email);
+            if (displayName.length() > 80) {
+                displayName = displayName.substring(0, 80);
+            }
             return userRepository.save(new UserAccount(email, displayName, role));
         });
         if (!auth.adminEmails().stream().anyMatch(admin -> admin.equalsIgnoreCase(email))) {
