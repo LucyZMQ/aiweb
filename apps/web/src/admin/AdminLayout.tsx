@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
@@ -35,6 +35,22 @@ export function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  const [apiUp, setApiUp] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/actuator/health')
+      .then((response) => response.json())
+      .then((body: { status?: string }) => {
+        if (!cancelled) setApiUp(body.status === 'UP')
+      })
+      .catch(() => {
+        if (!cancelled) setApiUp(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function handleLogout() {
     logout()
@@ -99,9 +115,9 @@ export function AdminLayout() {
             <strong>{pageTitle(location.pathname)}</strong>
           </div>
           <div className="admin-topbar-right">
-            <span className="admin-status">
+            <span className={`admin-status ${apiUp === false ? 'down' : ''}`}>
               <i />
-              API 正常
+              {apiUp === null ? '检测中' : apiUp ? 'API 正常' : 'API 异常'}
             </span>
             <button type="button" className="icon-button" title="数据总览">
               <BarChart3 size={18} />

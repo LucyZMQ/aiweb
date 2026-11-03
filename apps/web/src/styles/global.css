@@ -2482,6 +2482,15 @@ code {
   box-shadow: 0 0 0 3px rgba(110, 159, 92, 0.12);
 }
 
+.admin-status.down {
+  color: var(--danger);
+}
+
+.admin-status.down i {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(169, 67, 55, 0.12);
+}
+
 .admin-menu-button {
   display: none;
   place-items: center;
