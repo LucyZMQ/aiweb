@@ -13,6 +13,51 @@ api.example.com       → Render Web Service（Spring Boot Docker）
 
 > 免费额度、休眠策略和区域会变化，以各平台控制台为准。Render 免费实例在一段时间无请求后会休眠，冷启动通常 30–90 秒；国内访问 Cloudflare / Render 的稳定性不如国内云。正式面向国内用户建议走 [云服务器路线](DEPLOY-SERVER.md)。
 
+## 0. 没有域名的最短路径
+
+没有域名也可以完整上线，先用平台送的二级域名：
+
+```text
+前端  https://<project>.pages.dev
+API   https://<service>.onrender.com
+```
+
+SSL、CDN 都由平台自动提供。建议顺序：
+
+1. GitHub 建仓库并 push 代码。
+2. Neon 建库，拿连接串。
+3. Render 用 Docker 部署 `apps/api`，先拿到 API 地址。
+4. Cloudflare Pages 部署 `apps/web`，把 `VITE_API_BASE_URL` 指向 API。
+5. 回到 Render 更新 `CORS_ORIGINS` 和 `PUBLIC_BASE_URL`。
+6. 打开 `https://<project>.pages.dev/admin` 登录、发一篇文章。
+7. 测试通过后，再考虑买域名、接 SMTP/COS/极验。
+
+### 第一次登录没有 SMTP 怎么办
+
+为了先跑通闭环，第一次可以临时设置：
+
+```text
+MAIL_MODE=log
+EXPOSE_DEV_CODE=true
+```
+
+验证码会直接显示在登录页，也会打印在 Render 日志里。**这只用于你自己测试的 10 分钟**：
+
+- 不要把 `pages.dev` 链接发到公开群组。
+- 测试完立刻配置 SMTP，并把 `EXPOSE_DEV_CODE` 改成 `false` 后重新部署。
+- 管理员邮箱用你自己的邮箱（`ADMIN_EMAILS`），不要长期保留默认的 `admin@moyu.local`。
+
+### 注册入口
+
+| 平台 | 入口 | 建议登录方式 |
+| --- | --- | --- |
+| GitHub | <https://github.com/signup> | 邮箱 + 强密码，开启 2FA |
+| Neon | <https://console.neon.tech/signup> | Continue with GitHub |
+| Render | <https://dashboard.render.com/register> | Continue with GitHub |
+| Cloudflare | <https://dash.cloudflare.com/sign-up> | 邮箱 + 强密码，开启 2FA |
+
+Neon 免费计划目前不需要信用卡；Render 免费实例有每月 750 小时额度，15 分钟无流量会休眠；Cloudflare Pages 免费计划足够个人站点使用。以控制台实际显示为准。
+
 ## 0. 你需要准备
 
 | 项目 | 用途 | 是否必须 |
