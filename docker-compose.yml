@@ -1,0 +1,72 @@
+name: moyu-local
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: moyu
+      POSTGRES_USER: moyu
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-moyu_dev_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moyu -d moyu"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/moyu
+      DB_USER: moyu
+      DB_PASSWORD: ${DB_PASSWORD:-moyu_dev_password}
+      JWT_SECRET: ${JWT_SECRET:-local-docker-secret-change-me-0123456789abcdef}
+      JWT_TTL: ${JWT_TTL:-7d}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@moyu.local}
+      EXPOSE_DEV_CODE: ${EXPOSE_DEV_CODE:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8088,http://127.0.0.1:8088}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8088}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      UPLOAD_DIR: /app/data/uploads
+      MAIL_MODE: ${MAIL_MODE:-log}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@moyu.local}
+      GEETEST_ENABLED: ${GEETEST_ENABLED:-false}
+      GEETEST_CAPTCHA_ID: ${GEETEST_CAPTCHA_ID:-}
+      GEETEST_CAPTCHA_KEY: ${GEETEST_CAPTCHA_KEY:-}
+      DEMO_DATA: ${DEMO_DATA:-true}
+      ANALYTICS_TIMEZONE: ${ANALYTICS_TIMEZONE:-Asia/Shanghai}
+      ANALYTICS_IP_SALT: ${ANALYTICS_IP_SALT:-local-docker-salt}
+    volumes:
+      - uploads:/app/data/uploads
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_BAIDU_TONGJI_ID: ${VITE_BAIDU_TONGJI_ID:-}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8088:80"
+
+volumes:
+  postgres-data:
+  uploads:

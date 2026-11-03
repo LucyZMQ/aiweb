@@ -1,0 +1,104 @@
+name: Deploy PaaS
+
+# 零服务器方案：Cloudflare Pages（前端/CDN/SSL）+ Render（API）+ Neon（Postgres）
+# 启用方式：GitHub 仓库 Settings → Variables → 新建 DEPLOY_TARGET=paas
+# 详细步骤见 docs/DEPLOY-PAAS.md
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-paas
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Cloudflare Pages + Render
+    runs-on: ubuntu-latest
+    if: vars.DEPLOY_TARGET == 'paas' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: production-paas
+      url: ${{ vars.SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Build web for Pages
+        working-directory: apps/web
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          VITE_BAIDU_TONGJI_ID: ${{ vars.BAIDU_TONGJI_ID }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Deploy Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$RENDER_DEPLOY_HOOK" ]]; then
+            echo "RENDER_DEPLOY_HOOK is not set" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+
+      - name: Wait for API health
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 10 "$API_BASE_URL/actuator/health" | grep -q '"status":"UP"'; then
+              echo "API is healthy"
+              exit 0
+            fi
+            echo "waiting for Render ($i/60)…"
+            sleep 5
+          done
+          echo "API did not become healthy" >&2
+          exit 1
+
+      - name: Notify Feishu
+        if: always()
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          STATUS: ${{ job.status }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message || github.event.head_commit.message }}
+        run: |
+          if [[ "$STATUS" == "success" ]]; then
+            RESULT="success"
+            TITLE="墨屿 MOYU · PaaS 部署成功"
+          else
+            RESULT="failure"
+            TITLE="墨屿 MOYU · PaaS 部署失败"
+          fi
+          DETAILS=$(printf '**提交**：`%s`\n**提交人**：%s\n**环境**：Cloudflare Pages + Render\n\n> %s' \
+            "${SHA:0:7}" "$ACTOR" "$COMMIT_MESSAGE")
+          ./deploy/feishu-notify.sh "$TITLE" "$RESULT" "$DETAILS" "$SITE_URL"

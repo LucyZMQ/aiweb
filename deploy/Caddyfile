@@ -1,0 +1,31 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	@backend path /api/* /uploads/* /actuator/* /swagger-ui* /v3/api-docs*
+	handle @backend {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API · Java 21
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: apps/api/pom.xml
+
+      - name: Test and package
+        working-directory: apps/api
+        run: mvn -B verify
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: moyu-api-jar
+          path: apps/api/target/moyu-api-*.jar
+          retention-days: 7
+
+  web:
+    name: Web · React + Vite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: moyu-web-dist
+          path: apps/web/dist
+          retention-days: 7

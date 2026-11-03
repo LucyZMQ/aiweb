@@ -1,0 +1,145 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  build:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    if: vars.DEPLOY_TARGET == 'server' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    outputs:
+      image_prefix: ${{ steps.repo.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Lowercase repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.name }}/moyu-api:${{ env.TARGET_SHA }}
+            ghcr.io/${{ steps.repo.outputs.name }}/moyu-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and push Web
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=
+            VITE_BAIDU_TONGJI_ID=${{ vars.BAIDU_TONGJI_ID }}
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.name }}/moyu-web:${{ env.TARGET_SHA }}
+            ghcr.io/${{ steps.repo.outputs.name }}/moyu-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    needs: build
+    if: vars.DEPLOY_TARGET == 'server' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_SHA: ${{ env.TARGET_SHA }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: TARGET_SHA,GHCR_TOKEN,GHCR_USERNAME
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            cd /opt/moyu
+
+            git fetch --prune origin
+            git checkout --force "$TARGET_SHA"
+
+            set -a
+            source .env
+            set +a
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            export IMAGE_TAG="$TARGET_SHA"
+
+            docker compose --env-file .env -f deploy/docker-compose.prod.yml pull
+            docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+
+            ./deploy/healthcheck.sh "https://${DOMAIN}/actuator/health" 30
+
+  notify:
+    name: Notify Feishu
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: vars.DEPLOY_TARGET == 'server' && always() && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Send Feishu card
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message || github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ env.TARGET_SHA }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [[ "$BUILD_RESULT" == "success" && "$DEPLOY_RESULT" == "success" ]]; then
+            STATUS="success"
+            TITLE="墨屿 MOYU · 部署成功"
+          else
+            STATUS="failure"
+            TITLE="墨屿 MOYU · 部署失败"
+          fi
+
+          SHORT_SHA="${SHA:0:7}"
+          DETAILS=$(printf '**提交**：%s\n**分支**：main\n**提交人**：%s\n**镜像**：`%s`\n**流水线**：%s/%s/actions/runs/%s\n\n> %s' \
+            "$SHORT_SHA" "$ACTOR" "$SHORT_SHA" "$GITHUB_SERVER_URL" "$REPO" "$GITHUB_RUN_ID" "$COMMIT_MESSAGE")
+
+          ./deploy/feishu-notify.sh "$TITLE" "$STATUS" "$DETAILS" "$SITE_URL"

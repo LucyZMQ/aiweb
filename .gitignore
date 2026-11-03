@@ -1,0 +1,34 @@
+# local runtimes (portable JDK / Maven / Postgres)
+.tools/
+.data/
+backups/
+
+# node
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+*.tsbuildinfo
+
+# java
+apps/api/target/
+apps/api/data/
+*.class
+
+# env & secrets
+.env
+.env.*
+!.env.example
+!deploy/.env.production.example
+apps/web/.env.local
+apps/api/src/main/resources/application-local.yml
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+
+# playwright artifacts
+playwright-report/
+test-results/

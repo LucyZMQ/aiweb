@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3efe2"/>
+      <stop offset="1" stop-color="#e9e4d4"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f5d50" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#2f5d50" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="lines" width="1200" height="75" patternUnits="userSpaceOnUse">
+      <path d="M0 75H1200" stroke="#17231d" stroke-opacity=".1" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="750" fill="url(#bg)"/>
+  <rect width="1200" height="750" fill="url(#lines)"/>
+  <rect x="72" y="92" width="1056" height="566" rx="10" fill="#fffdf7" stroke="#17231d" stroke-opacity=".18"/>
+  <g font-family="monospace" fill="#17231d" opacity=".5" font-size="11" letter-spacing="2">
+    <text x="100" y="132">OVERVIEW / LAST 14 DAYS</text>
+    <text x="1100" y="132" text-anchor="end">LIVE</text>
+  </g>
+  <g font-family="Georgia, 'Songti SC', serif" fill="#17231d">
+    <text x="100" y="208" font-size="56">12,480</text>
+    <text x="100" y="238" font-size="15" fill="#2f5d50">PAGE VIEWS</text>
+    <text x="400" y="208" font-size="56">3,214</text>
+    <text x="400" y="238" font-size="15" fill="#bd6847">VISITORS</text>
+  </g>
+  <path d="M100 560C190 545 210 470 290 480s110 30 180-30 105-110 190-78 100 54 176-16 92-60 122-50v208H100Z" fill="url(#area)"/>
+  <path d="M100 560C190 545 210 470 290 480s110 30 180-30 105-110 190-78 100 54 176-16 92-60 122-50" fill="none" stroke="#2f5d50" stroke-width="2.5"/>
+  <path d="M100 590C210 585 235 540 330 550s130 20 210-8 100-60 180-42 120 46 188 6 70-40 102-34" fill="none" stroke="#bd6847" stroke-width="1.6" stroke-dasharray="4 5"/>
+  <g fill="#2f5d50">
+    <circle cx="100" cy="560" r="5"/><circle cx="470" cy="450" r="5"/><circle cx="840" cy="372" r="5"/><circle cx="1058" cy="306" r="5"/>
+  </g>
+  <g font-family="Georgia, 'Songti SC', serif" fill="#17231d">
+    <text x="100" y="710" font-size="42" letter-spacing="-1">A DASHBOARD FOR THE BLOG</text>
+    <text x="1100" y="710" font-size="14" font-family="monospace" opacity=".45" text-anchor="end">PV / UV / PATHS</text>
+  </g>
+</svg>

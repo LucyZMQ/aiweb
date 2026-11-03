@@ -1,0 +1,105 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: moyu-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5433}/${DB_NAME:moyu}}
+    username: ${DB_USER:moyu}
+    password: ${DB_PASSWORD:moyu_dev_password}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    mail:
+      enabled: ${MAIL_HEALTH_ENABLED:false}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SPRINGDOC_ENABLED:true}
+    operations-sorter: method
+    tags-sorter: alpha
+  info:
+    title: MOYU Blog API
+    version: 0.1.0
+    description: 墨屿博客的公开 API 与管理 API
+
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:moyu-dev-only-change-me-please-0123456789abcdef0123456789abcdef}
+    token-ttl: ${JWT_TTL:7d}
+    admin-emails: ${ADMIN_EMAILS:admin@moyu.local}
+    expose-dev-code: ${EXPOSE_DEV_CODE:true}
+    code-ttl: 5m
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  geetest:
+    enabled: ${GEETEST_ENABLED:false}
+    captcha-id: ${GEETEST_CAPTCHA_ID:}
+    captcha-key: ${GEETEST_CAPTCHA_KEY:}
+    verify-url: https://gcaptcha4.geetest.com/validate
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    local-dir: ${UPLOAD_DIR:./data/uploads}
+    public-base-url: ${PUBLIC_BASE_URL:}
+    cos:
+      secret-id: ${COS_SECRET_ID:}
+      secret-key: ${COS_SECRET_KEY:}
+      region: ${COS_REGION:ap-guangzhou}
+      bucket: ${COS_BUCKET:}
+      cdn-domain: ${COS_CDN_DOMAIN:}
+  mail:
+    mode: ${MAIL_MODE:log}
+    from-name: ${MAIL_FROM_NAME:墨屿 MOYU}
+    from-address: ${MAIL_FROM:no-reply@moyu.local}
+  analytics:
+    timezone: ${ANALYTICS_TIMEZONE:Asia/Shanghai}
+    ip-salt: ${ANALYTICS_IP_SALT:moyu-local-salt}
+  demo-data: ${DEMO_DATA:true}

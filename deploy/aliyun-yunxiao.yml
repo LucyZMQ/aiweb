@@ -1,0 +1,110 @@
+# ============================================================
+# 阿里云云效 Flow · YAML 流水线示例
+#
+# 使用方式：
+# 1. 云效 → 流水线 → 新建 → 选择「YAML 流水线」，粘贴本文件。
+# 2. 把 <...> 占位符替换成你的服务连接 ID、主机组 ID、仓库地址。
+# 3. 在「变量与缓存」中配置 FEISHU_WEBHOOK、DOMAIN。
+# 4. 在服务器 /opt/moyu/.env 配置生产环境变量（参考 deploy/.env.production.example）。
+#
+# 这条流水线不需要镜像仓库：构建 jar + dist 后上传构建物，
+# 通过主机组部署到 ECS，在服务器上用 Docker 构建并启动。
+# ============================================================
+
+name: moyu-github-to-ecs
+
+sources:
+  github_repo:
+    type: github
+    name: moyu
+    endpoint: https://github.com/<owner>/<repo>.git
+    branch: main
+    triggerEvents:
+      - push
+    branchesFilter: ^main$
+    certificate:
+      type: serviceConnection
+      serviceConnection: <github-service-connection-id>
+
+defaultWorkspace: github_repo
+
+stages:
+  test:
+    name: 测试与构建
+    jobs:
+      build_job:
+        name: 构建 API 与 Web
+        runsOn: public/cn-hangzhou
+        steps:
+          api_build:
+            step: JavaBuild
+            name: 构建 Spring Boot
+            with:
+              run: |
+                cd apps/api
+                mvn -B -DskipTests package
+
+          web_build:
+            step: NodeBuild
+            name: 构建 React
+            with:
+              run: |
+                cd apps/web
+                corepack enable
+                corepack prepare pnpm@10.10.0 --activate
+                pnpm install --frozen-lockfile
+                pnpm build
+
+          upload:
+            step: ArtifactUpload
+            name: 上传部署构建物
+            with:
+              uploadType: flowPublic
+              artifact: default
+              filePath:
+                - apps/api/target/moyu-api-0.1.0.jar
+                - apps/web/dist
+                - apps/web/nginx.conf
+                - deploy
+
+  deploy:
+    name: 部署到 ECS
+    jobs:
+      deploy_job:
+        name: Docker Compose 发布
+        component: VMDeploy
+        with:
+          artifact: $[stages.test.build_job.upload.artifacts.default]
+          machineGroup: <machine-group-id>
+          artifactDownloadPath: /tmp/moyu-artifact.tgz
+          executeUser: root
+          run: |
+            set -euo pipefail
+            mkdir -p /opt/moyu/staging
+            rm -rf /opt/moyu/staging/*
+            tar zxvf /tmp/moyu-artifact.tgz -C /opt/moyu/staging
+
+            # 构建物保留仓库目录结构；若你的 ArtifactUpload 展开了目录，
+            # 请把下面两行改成 staging 下实际存在的路径。
+            cp -a /opt/moyu/staging/apps /opt/moyu/
+            cp -a /opt/moyu/staging/deploy /opt/moyu/
+
+            cd /opt/moyu
+            set -a
+            source .env
+            set +a
+
+            docker compose --env-file .env -f deploy/docker-compose.runtime.yml up -d --build --remove-orphans
+            docker image prune -f
+            ./deploy/healthcheck.sh "https://${DOMAIN}/actuator/health" 30
+
+            if [[ -n "${FEISHU_WEBHOOK:-}" ]]; then
+              ./deploy/feishu-notify.sh \
+                "墨屿 MOYU · 云效部署成功" \
+                "success" \
+                "**提交**：${BUILD_NUMBER:-unknown}" \
+                "https://${DOMAIN}"
+            fi
+
+# 失败通知建议在云效「流水线设置 → 通知」中配置飞书群机器人；
+# YAML 的最后一个步骤不会在失败时执行。
