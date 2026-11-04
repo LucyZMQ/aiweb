@@ -1,6 +1,7 @@
 name: Deploy PaaS
 
-# 零服务器方案：Cloudflare Pages（前端/CDN/SSL）+ Render（API）+ Neon（Postgres）
+# 零服务器方案：Cloudflare Workers 静态资源（前端/CDN/SSL）+ Render（API）+ Neon（Postgres）
+# Cloudflare 自 2026 年起将 Pages 并入 Workers，本工作流使用 Workers 静态资源。
 # 启用方式：GitHub 仓库 Settings → Variables → 新建 DEPLOY_TARGET=paas
 # 详细步骤见 docs/DEPLOY-PAAS.md
 
@@ -20,7 +21,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy Cloudflare Pages + Render
+    name: Deploy Cloudflare Workers + Render
     runs-on: ubuntu-latest
     if: vars.DEPLOY_TARGET == 'paas' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     environment:
@@ -50,12 +51,13 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      - name: Deploy Cloudflare Pages
+      - name: Deploy Cloudflare Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+          workingDirectory: apps/web
+          command: deploy
 
       - name: Trigger Render deploy
         env:
@@ -99,6 +101,6 @@ jobs:
             RESULT="failure"
             TITLE="墨屿 MOYU · PaaS 部署失败"
           fi
-          DETAILS=$(printf '**提交**：`%s`\n**提交人**：%s\n**环境**：Cloudflare Pages + Render\n\n> %s' \
+          DETAILS=$(printf '**提交**：`%s`\n**提交人**：%s\n**环境**：Cloudflare Workers + Render\n\n> %s' \
             "${SHA:0:7}" "$ACTOR" "$COMMIT_MESSAGE")
           ./deploy/feishu-notify.sh "$TITLE" "$RESULT" "$DETAILS" "$SITE_URL"
