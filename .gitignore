@@ -32,3 +32,5 @@ apps/api/src/main/resources/application-local.yml
 # playwright artifacts
 playwright-report/
 test-results/
+.pnpm-store/
+.wrangler/
